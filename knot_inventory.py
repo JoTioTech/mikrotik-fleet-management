@@ -2,8 +2,7 @@
 import json
 import urllib.request
 
-# 1. Fetch IP list from your 3rd party API or Node-RED wrapper endpoint
-API_URL = "http://localhost:1880/api/devices"
+API_URL = "http://10.1.0.25:1880/api/devices" # IP address of the server, can't run on local hust as AWX is under kubernetes
 
 def get_inventory():
     req = urllib.request.Request(API_URL, headers={"User-Agent": "Ansible-Inventory"})
@@ -17,7 +16,6 @@ def get_inventory():
     }
 
     for dev in devices:
-        # Expecting dev = {"ip": "10.8.0.12", "id": "knot-01"}
         host_key = dev.get("id", dev["ip"])
         inventory["all"]["hosts"].append(host_key)
         inventory["knot_gateways"]["hosts"].append(host_key)
