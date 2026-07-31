@@ -66,9 +66,8 @@
           ansible.builtin.uri:
             url: "http://awx-service.awx.svc.cluster.local/api/v2/hosts/?name={{ inventory_hostname }}"
             method: GET
-            user: "admin"
-            password: "{{ awx_admin_password }}"
-            force_basic_auth: true
+            headers:
+              Authorization: "Bearer {{ awx_token }}"
             status_code: 200
           register: awx_host_lookup
 
@@ -76,13 +75,15 @@
           ansible.builtin.uri:
             url: "http://awx-service.awx.svc.cluster.local{{ awx_host_lookup.json.results[0].url }}"
             method: PATCH
-            user: "admin"
-            password: "{{ awx_admin_password }}"
-            force_basic_auth: true
+            headers:
+              Authorization: "Bearer {{ awx_token }}"
             body_format: json
             body:
               description: "FW: {{ firmware_out.stdout[0] | trim }} | ROS: {{ ansible_facts['net_version'] | trim }} | Upgrade Available: {{ device_report.update_needed }}"
             status_code: 200
-          when: awx_host_lookup.json.results | length > 0
+          when:
+            - awx_host_lookup.json is defined
+            - awx_host_lookup.json.results is defined
+            - awx_host_lookup.json.results | length > 0
       delegate_to: localhost
       ignore_errors: true
