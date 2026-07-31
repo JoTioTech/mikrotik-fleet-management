@@ -3,11 +3,7 @@
   hosts: knot_gateways
   gather_facts: false
   connection: network_cli
-  vars_files:
-    - secrets.yml
   vars:
-    ansible_user: "admin+cet512w"
-    ansible_password: "{{ knot_password }}"
     ansible_network_os: community.routeros.routeros
     ansible_host_key_checking: false
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
