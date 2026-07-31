@@ -1,0 +1,67 @@
+---
+- name: Mikrotik RouterOS and Firmware Upgrades
+  hosts: all
+  gather_facts: false
+  connection: network_cli
+  vars_files:
+    - secrets.yml
+  vars:
+    ansible_user: "admin+cet512w"
+    ansible_password: "{{ knot_password }}"
+    ansible_network_os: community.routeros.routeros
+    ansible_host_key_checking: false
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+  tasks:
+  - name: COM Check for RouterOS updates
+    community.routeros.command:
+      commands:
+        - /system package update set channel=stable
+        - /system package update check-for-updates
+    register: system_update_print
+
+  - name: COM Update RouterOS version
+    community.routeros.command:
+      commands:
+        - /system package update install
+    when: system_update_print is not search('System is already up to date')
+
+  - name: COM Sleeping for 60 seconds.  Giving time for routers to reboot.
+    ansible.builtin.wait_for:
+      timeout: 60
+    delegate_to: localhost
+
+  - name: COM Check Current firmware
+    community.routeros.command:
+      commands:
+        - ':put [/system routerboard get current-firmware]'
+    register: firmware_current
+
+  - name: COM Check Upgrade firmware
+    community.routeros.command:
+      commands:
+        - ':put [/system routerboard get upgrade-firmware]'
+    register: firmware_upgrade
+
+  - name: COM Upgrade firmware
+    community.routeros.command:
+      commands:
+        - ':execute script="/system routerboard upgrade"'
+    when: firmware_current != firmware_upgrade
+
+  - name: COM Wait for firmware upgrade and then reboot
+    community.routeros.command:
+      commands:
+        - /system routerboard print
+    register: Reboot_Status
+    until: "Reboot_Status is search(\"please reboot\")"
+    notify:
+      - COM Reboot Mikrotik
+    retries: 3
+    delay: 15
+    when: firmware_current != firmware_upgrade
+
+  handlers:
+    - name : COM Reboot Mikrotik
+      community.routeros.command:
+        commands:
+          - ':execute script="/system reboot"'

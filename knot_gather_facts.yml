@@ -1,0 +1,71 @@
+---
+- name: Audit MikroTik KNOT Gateways
+  hosts: knot_gateways
+  gather_facts: false
+  connection: network_cli
+  vars_files:
+    - secrets.yml
+  vars:
+    ansible_user: "admin+cet512w"
+    ansible_password: "{{ knot_password }}"
+    ansible_network_os: community.routeros.routeros
+    ansible_host_key_checking: false
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+  tasks:
+    - name: Set update channel and check for updates
+      community.routeros.command:
+        commands:
+          - /system package update set channel=stable
+          - /system package update print
+      register: ros_update_out
+
+    - name: Get current and upgrade firmware
+      community.routeros.command:
+        commands:
+          - ':put [/system routerboard get current-firmware]'
+          - ':put [/system routerboard get upgrade-firmware]'
+      register: firmware_out
+
+    - name: Get LoRa Gateway ID
+      community.routeros.command:
+        commands:
+          - /iot lora print proplist=gateway-id
+      register: lora_cmd
+      failed_when: "'bad command' in lora_cmd.stdout"
+      ignore_errors: true
+
+    - name: Get IMEI via AT Chat
+      community.routeros.command:
+        commands:
+          - /interface ppp-client at-chat ppp-out1 input="AT+CGSN"
+      register: imei_cmd
+      ignore_errors: true
+
+    - name: Gather Base System Facts
+      community.routeros.facts:
+        gather_subset:
+          - default
+          - interfaces
+
+    - name: Construct Device Status Report
+      set_fact:
+        device_report:
+          identity: "{{ ansible_facts['net_hostname'] | trim }}"
+          ip: "{{ ansible_host }}"
+          model: "{{ ansible_facts['net_model'] | trim }}"
+          serial_number: "{{ ansible_facts['net_serialnum'] | trim }}"
+          current_ros_version: "{{ ansible_facts['net_version'] | trim }}"
+          latest_stable_ros_version: "{{ (ros_update_out.stdout[0] | regex_search('latest-version:\\s*([^\\s]+)', '\\1') | default(['N/A'], true)) | first }}"
+          current_firmware: "{{ firmware_out.stdout[0] | trim }}"
+          upgrade_firmware: "{{ firmware_out.stdout[1] | trim }}"
+          gateway_id: "{{ (lora_cmd.stdout | default(['']) | first | regex_search('gateway-id=\"([^\"]*)', '\\1') | default(['N/A'], true)) | first }}"
+          imei: "{{ (imei_cmd.stdout | default(['']) | first | regex_search('[0-9]{15}') | default('N/A', true)) }}"
+
+    - name: Send Report to Node-RED Endpoint
+      ansible.builtin.uri:
+        url: "http://node-red-server:1880/api/telemetry/report"
+        method: POST
+        body_format: json
+        body: "{{ device_report }}"
+      delegate_to: localhost
