@@ -58,3 +58,4 @@
           upgrade_firmware: "{{ firmware_out.stdout[1] | trim }}"
           gateway_id: "{{ (lora_cmd.stdout | default(['']) | first | regex_search('gateway-id=\"([^\"]*)', '\\1') | default(['N/A'], true)) | first }}"
           imei: "{{ (imei_cmd.stdout | default(['']) | first | regex_search('[0-9]{15}') | default('N/A', true)) }}"
+          update_needed: "{{ (firmware_out.stdout[0] | trim) != (firmware_out.stdout[1] | trim) }}"
