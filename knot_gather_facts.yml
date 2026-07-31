@@ -45,7 +45,8 @@
           - interfaces
 
     - name: Construct Device Status Report
-      set_fact:
+      ansible.builtin.set_fact:
+        cacheable: true
         device_report:
           identity: "{{ ansible_facts['net_hostname'] | trim }}"
           ip: "{{ ansible_host }}"
